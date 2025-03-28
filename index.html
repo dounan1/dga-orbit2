@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Planet Orbits</title>
+    <title>3D Solar System</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Canvas will be inserted here by Three.js -->
+
     <!-- Hidden video for background audio -->
     <video id="bg-audio" loop muted playsinline>
         <!-- IMPORTANT: Replace with the actual path to your video file -->
@@ -14,21 +16,14 @@
         Your browser does not support the video tag.
     </video>
 
-    <div id="container">
-        <div class="view-container">
-            <h2>Side View</h2>
-            <div id="view-side"></div>
-        </div>
-        <!-- Top view removed -->
-    </div>
+    <button id="startButton">Start Simulation</button>
 
-    <button id="startButton">Start Animation & Audio</button>
-
-    <!-- Import Three.js -->
+    <!-- Import Three.js and Postprocessing modules -->
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
             }
         }
     </script>

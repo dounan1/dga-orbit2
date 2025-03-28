@@ -2,47 +2,22 @@ body {
     margin: 0;
     overflow: hidden; /* Prevent scrollbars */
     background-color: #000;
-    color: #ccc;
+    color: #ccc; /* For button text if needed */
     font-family: sans-serif;
-    display: flex;
-    flex-direction: column; /* Stack button below view */
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh; /* Full viewport height */
+    /* display: flex and align/justify removed for full screen canvas */
 }
 
-#container {
-    display: flex;
-    justify-content: center; /* Center the single view */
-    align-items: flex-start;
-    width: 80%; /* Adjust width as needed */
-    max-width: 800px; /* Limit max width */
-    margin-bottom: 20px;
-}
-
-.view-container {
-    flex: 1; /* Allow it to take available space */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.view-container h2 {
-    margin-top: 0;
-    margin-bottom: 5px;
-    font-size: 1em;
-    font-weight: normal;
-}
-
-#view-side { /* Style the single view */
+/* Make canvas fill the screen */
+canvas {
+    display: block; /* Remove potential extra space below canvas */
+    position: fixed; /* Use fixed or absolute */
+    top: 0;
+    left: 0;
     width: 100%;
-    aspect-ratio: 16 / 9; /* Wider aspect ratio might be suitable */
-    background-color: #111;
-    border: 1px solid #333;
-    max-height: 60vh; /* Limit height relative to viewport */
+    height: 100%;
+    z-index: 1; /* Behind the button */
 }
 
-/* #view-top styles removed */
 
 /* Hide the video element visually */
 #bg-audio {
@@ -54,17 +29,21 @@ body {
 }
 
 #startButton {
-    padding: 10px 20px;
-    font-size: 1.2em;
+    position: absolute; /* Position over the canvas */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center the button */
+    padding: 15px 30px;
+    font-size: 1.5em;
     cursor: pointer;
-    background-color: #444;
+    background-color: rgba(50, 50, 50, 0.8); /* Semi-transparent */
     color: #fff;
-    border: none;
-    border-radius: 5px;
-    position: relative;
-    z-index: 10;
+    border: 1px solid #888;
+    border-radius: 8px;
+    z-index: 10; /* Ensure it's clickable and above canvas */
+    transition: background-color 0.3s ease;
 }
 
 #startButton:hover {
-    background-color: #666;
+    background-color: rgba(80, 80, 80, 0.9);
 }
