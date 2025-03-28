@@ -11,16 +11,30 @@ const BASE_PLANET_RADIUS = 0.2;
 const BASE_ORBIT_SPEED = 0.25;
 const BASE_ROTATION_SPEED = 0.1;
 
-// --- Texture Loading ---
-const textureLoader = new THREE.TextureLoader();
+// --- Shockwave Configuration ---
+const SHOCKWAVE_COLOR = 0xffffff; // White color
+const SHOCKWAVE_START_RADIUS = SUN_RADIUS + 0.1;
+const SHOCKWAVE_SPEED = 25.0;
+const SHOCKWAVE_DURATION = 2.0; // Slightly shorter duration might look better
+const SHOCKWAVE_NUM_LINES = 150; // Number of radial lines
+const SHOCKWAVE_THICKNESS = 1.0; // Initial length/thickness of the shockwave band
+const SHOCKWAVE_INITIAL_OPACITY = 0.7; // Starting opacity
 
-// --- IMPORTANT: REPLACE THESE PATHS ---
+// --- !!! IMPORTANT: Replace with YOUR audio ring timestamps !!! ---
+const ringTimestamps = [
+    0, 5.2, 15.8, 30.1, 45.0, 60.5, 78.2, 92.5, 110.3,
+    // Add all the times (in seconds) where a ring starts
+];
+// --- -------------------------------------------------------- ---
+
+const textureLoader = new THREE.TextureLoader();
+// --- Texture Paths (Replace!) ---
 const sunTexturePath = 'sun_texture.jpg';
 const planetTexturePaths = [
     'mercury_texture.jpg', 'venus_texture.jpg', 'earth_texture.jpg', 'mars_texture.jpg',
     'jupiter_texture.jpg', 'saturn_texture.jpg', 'uranus_texture.jpg', 'neptune_texture.jpg'
 ];
-// --- ------------------------- ---
+// --- ----------------------- ---
 
 const planetsData = [
     { size: 0.38, rotationFactor: 0.05 }, { size: 0.95, rotationFactor: -0.02 },
@@ -30,7 +44,6 @@ const planetsData = [
 ];
 const NUM_PLANETS = planetsData.length;
 const largestOrbit = BASE_ORBIT_RADIUS + (NUM_PLANETS - 1) * ORBIT_INCREMENT;
-
 
 // --- DOM Elements ---
 const videoElement = document.getElementById('bg-audio');
@@ -42,10 +55,12 @@ let scene, camera, renderer, composer, clock;
 let sunMesh;
 const planets = [];
 let animationId = null;
+const activeShockwaves = [];
+let previousTime = 0;
+const triggeredTimestamps = new Set();
 
 // --- Initialization Function ---
 function init() {
-    // Scene
     scene = new THREE.Scene();
     clock = new THREE.Clock();
 
@@ -59,41 +74,27 @@ function init() {
     const sunMaterial = new THREE.MeshBasicMaterial({ map: sunTexture });
     sunMesh = new THREE.Mesh(sunGeometry, sunMaterial);
     scene.add(sunMesh);
-
     const pointLight = new THREE.PointLight(0xffffff, 40, 500, 1.5);
     sunMesh.add(pointLight);
 
-    // Planets
+    // Planets (same setup as before)
     const planetGeometryCache = {};
     for (let i = 0; i < NUM_PLANETS; i++) {
         const data = planetsData[i];
         const orbitRadius = BASE_ORBIT_RADIUS + i * ORBIT_INCREMENT;
         const planetRadius = BASE_PLANET_RADIUS * data.size;
-
         let geometry = planetGeometryCache[data.size];
         if (!geometry) {
             geometry = new THREE.SphereGeometry(Math.max(planetRadius, 0.1), 32, 32);
             planetGeometryCache[data.size] = geometry;
         }
-
         const planetTexture = textureLoader.load(planetTexturePaths[i]);
-        const material = new THREE.MeshStandardMaterial({
-            map: planetTexture,
-            roughness: 0.9,
-            metalness: 0.1
-        });
-
+        const material = new THREE.MeshStandardMaterial({ map: planetTexture, roughness: 0.9, metalness: 0.1 });
         const planet = new THREE.Mesh(geometry, material);
-
         const orbitSpeed = BASE_ORBIT_SPEED / Math.sqrt(orbitRadius / BASE_ORBIT_RADIUS);
         const rotationSpeed = BASE_ROTATION_SPEED * data.rotationFactor;
         const initialAngle = Math.random() * Math.PI * 2;
-
-        planet.userData = {
-            angle: initialAngle, orbitSpeed: orbitSpeed, rotationSpeed: rotationSpeed,
-            orbitRadius: orbitRadius
-        };
-
+        planet.userData = { angle: initialAngle, orbitSpeed: orbitSpeed, rotationSpeed: rotationSpeed, orbitRadius: orbitRadius };
         planet.position.x = orbitRadius * Math.cos(initialAngle);
         planet.position.z = orbitRadius * Math.sin(initialAngle);
         scene.add(planet);
@@ -106,17 +107,17 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000);
     renderer.toneMapping = THREE.ReinhardToneMapping;
-    renderer.toneMappingExposure = 1.5;
+    renderer.toneMappingExposure = 1.5; // May need adjustment based on shockwave brightness
     body.appendChild(renderer.domElement);
 
-    // Camera (Crucially defined before composer)
-    setupCamera(); // Now we ensure camera exists
+    // Camera
+    setupCamera();
 
     // Post Processing
-    const renderScene = new RenderPass(scene, camera); // camera is now defined
+    const renderScene = new RenderPass(scene, camera);
     const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
-        1.0, 0.3, 0.8
+        1.0, 0.3, 0.8 // strength, radius, threshold
     );
     composer = new EffectComposer(renderer);
     composer.addPass(renderScene);
@@ -130,33 +131,90 @@ function init() {
 // --- Camera Setup ---
 function setupCamera() {
     const aspect = window.innerWidth / window.innerHeight;
-    // If camera doesn't exist, create it. Otherwise, update it.
     if (!camera) {
         camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-        // Set initial position only once
         camera.position.set(largestOrbit * 1.0, largestOrbit * 0.8, largestOrbit * 1.5);
     } else {
         camera.aspect = aspect;
     }
-    camera.lookAt(scene.position); // Always look at the center
-    camera.updateProjectionMatrix(); // Apply aspect changes
+    camera.lookAt(scene.position);
+    camera.updateProjectionMatrix();
 }
 
+// --- Shockwave Creation (Revised) ---
+function createShockwave() {
+    const geometry = new THREE.BufferGeometry();
+    const vertices = new Float32Array(SHOCKWAVE_NUM_LINES * 2 * 3); // numLines * 2 vertices/line * 3 coordinates/vertex
+    const startRadius = SHOCKWAVE_START_RADIUS;
+    const endRadius = SHOCKWAVE_START_RADIUS + SHOCKWAVE_THICKNESS;
 
-// --- Animation Loop ---
+    for (let i = 0; i < SHOCKWAVE_NUM_LINES; i++) {
+        const angle = (i / SHOCKWAVE_NUM_LINES) * Math.PI * 2;
+        const cosA = Math.cos(angle);
+        const sinA = Math.sin(angle);
+
+        const idx = i * 6; // 6 floats per line (x1,y1,z1, x2,y2,z2)
+
+        // Start vertex
+        vertices[idx] = startRadius * cosA;
+        vertices[idx + 1] = 0; // Y coordinate
+        vertices[idx + 2] = startRadius * sinA;
+
+        // End vertex
+        vertices[idx + 3] = endRadius * cosA;
+        vertices[idx + 4] = 0; // Y coordinate
+        vertices[idx + 5] = endRadius * sinA;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+    const material = new THREE.LineBasicMaterial({
+        color: SHOCKWAVE_COLOR,
+        transparent: true,
+        opacity: SHOCKWAVE_INITIAL_OPACITY,
+        blending: THREE.AdditiveBlending, // Glow with bloom
+        // linewidth: 1 // Note: linewidth > 1 often ignored on Windows/ANGLE
+    });
+
+    const shockwaveLines = new THREE.LineSegments(geometry, material);
+    shockwaveLines.userData = {
+        startTime: clock.getElapsedTime(),
+        duration: SHOCKWAVE_DURATION,
+        speed: SHOCKWAVE_SPEED,
+        startRadius: SHOCKWAVE_START_RADIUS,
+        thickness: SHOCKWAVE_THICKNESS,
+        numLines: SHOCKWAVE_NUM_LINES
+    };
+
+    scene.add(shockwaveLines);
+    activeShockwaves.push(shockwaveLines);
+    console.log("Created shockwave lines, count:", SHOCKWAVE_NUM_LINES);
+}
+
+// --- Animation Loop (Revised Shockwave Update) ---
 function animate() {
     animationId = requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    const elapsed = clock.getElapsedTime();
+    const currentTime = videoElement.currentTime;
 
-    // Sun Rotation
-    if (sunMesh) sunMesh.rotation.y += 0.01 * delta;
-
-    // Planet Orbit and Rotation
-    planets.forEach(planet => {
-        planet.userData.angle += planet.userData.orbitSpeed * delta;
-        if (planet.userData.angle > Math.PI * 2) {
-            planet.userData.angle -= Math.PI * 2;
+    // --- Audio Trigger Logic ---
+    if (currentTime < previousTime && previousTime > 1.0) {
+        triggeredTimestamps.clear();
+    }
+    for (const timestamp of ringTimestamps) {
+        if (previousTime < timestamp && currentTime >= timestamp && !triggeredTimestamps.has(timestamp)) {
+            createShockwave();
+            triggeredTimestamps.add(timestamp);
+            setTimeout(() => triggeredTimestamps.delete(timestamp), 5000);
         }
+    }
+    previousTime = currentTime;
+
+    // --- Update Sun & Planets (Same as before) ---
+    if (sunMesh) sunMesh.rotation.y += 0.01 * delta;
+    planets.forEach(planet => {
+        planet.userData.angle = (planet.userData.angle + planet.userData.orbitSpeed * delta) % (Math.PI * 2);
         const angle = planet.userData.angle;
         const radius = planet.userData.orbitRadius;
         planet.position.x = radius * Math.cos(angle);
@@ -164,19 +222,70 @@ function animate() {
         planet.rotation.y += planet.userData.rotationSpeed * delta;
     });
 
-    // Render using the composer
+    // --- Update Active Shockwaves (Revised) ---
+    let needsUpdate = false; // Flag to update geometry attribute only once if needed
+    for (let i = activeShockwaves.length - 1; i >= 0; i--) {
+        const shockwave = activeShockwaves[i];
+        const data = shockwave.userData;
+        const geometry = shockwave.geometry;
+        const positionAttribute = geometry.attributes.position;
+        const vertices = positionAttribute.array;
+        const age = elapsed - data.startTime;
+
+        if (age > data.duration) {
+            scene.remove(shockwave);
+            geometry.dispose(); // Important cleanup
+            shockwave.material.dispose(); // Important cleanup
+            activeShockwaves.splice(i, 1);
+        } else {
+            needsUpdate = true; // Mark that we are updating vertices
+            const progress = age / data.duration;
+            const currentOuterRadius = data.startRadius + age * data.speed;
+            // Keep thickness constant or make it expand slightly? Let's keep constant for now.
+            const currentInnerRadius = Math.max(data.startRadius, currentOuterRadius - data.thickness);
+
+            // Update vertices
+            for (let j = 0; j < data.numLines; j++) {
+                const angle = (j / data.numLines) * Math.PI * 2;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const idx = j * 6;
+
+                // Update Start vertex
+                vertices[idx] = currentInnerRadius * cosA;
+                // vertices[idx + 1] = 0; // Y is always 0
+                vertices[idx + 2] = currentInnerRadius * sinA;
+
+                // Update End vertex
+                vertices[idx + 3] = currentOuterRadius * cosA;
+                // vertices[idx + 4] = 0; // Y is always 0
+                vertices[idx + 5] = currentOuterRadius * sinA;
+            }
+
+            // Fade out opacity
+            shockwave.material.opacity = SHOCKWAVE_INITIAL_OPACITY * (1.0 - progress);
+        }
+    }
+    // IMPORTANT: Tell Three.js to update the geometry buffer on the GPU if we changed it
+    if (needsUpdate) {
+       activeShockwaves.forEach(sw => sw.geometry.attributes.position.needsUpdate = true);
+       // It might be slightly more efficient to just update the ones that changed,
+       // but this ensures all active ones are updated if modified. Reset flag after.
+       // Reset the needsUpdate flag on each attribute after render maybe?
+       // For simplicity, just mark all active ones if any were updated.
+    }
+
+
+    // --- Render ---
     if (composer) composer.render(delta);
 }
+
 
 // --- Resize Handling ---
 function onWindowResize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-
-    // Update camera first
-    setupCamera(); // This updates aspect and projection matrix
-
-    // Then update renderer and composer
+    setupCamera();
     if (renderer) renderer.setSize(width, height);
     if (composer) composer.setSize(width, height);
 }
@@ -184,33 +293,18 @@ function onWindowResize() {
 // --- Start Button Logic ---
 function startExperience() {
     console.log("Starting experience...");
-
-    // Ensure Three.js components are initialized if they weren't already
-    if (!scene) {
-        init(); // Should have been called already, but safe fallback
-    }
-     if (!camera) { // Double check camera setup
-        setupCamera();
-        // If composer relies on camera, might need re-init here if init failed
-        // but the structure above should prevent this state.
-        if (composer && composer.passes[0] instanceof RenderPass) {
-             composer.passes[0].camera = camera; // Update camera in existing pass
-        }
-    }
-
+    if (!scene) init();
+    if (!camera) setupCamera();
 
     videoElement.muted = false;
     videoElement.play().then(() => {
         console.log("Audio playback started.");
-        if (!animationId) {
-            animate(); // Start animation loop
-        }
+        previousTime = videoElement.currentTime;
+        if (!animationId) animate();
     }).catch(error => {
         console.error("Audio playback failed:", error);
         alert("Audio could not start automatically. Browser restrictions likely apply.");
-        if (!animationId) {
-            animate(); // Start animation loop even if audio fails
-        }
+        if (!animationId) animate();
     });
     startButton.style.display = 'none';
 }
