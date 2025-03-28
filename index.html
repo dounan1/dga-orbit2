@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Planet Orbits</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Hidden video for background audio -->
+    <video id="bg-audio" loop muted playsinline>
+        <!-- IMPORTANT: Replace with the actual path to your video file -->
+        <source src="background_video.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <div id="container">
+        <div class="view-container">
+            <h2>Side View</h2>
+            <div id="view-side"></div>
+        </div>
+        <!-- Top view removed -->
+    </div>
+
+    <button id="startButton">Start Animation & Audio</button>
+
+    <!-- Import Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
+            }
+        }
+    </script>
+    <!-- Your application script -->
+    <script type="module" src="main.js"></script>
+</body>
+</html>
